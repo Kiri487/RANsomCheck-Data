@@ -51,7 +51,7 @@ class Net(torch.nn.Module):
 
         x = torch.cat([x_name_cnn1, x_name_cnn2, x_name_cnn3, x_behavior], dim=-1)
 
-        x = self.transformer(x, x)
+        x = self.transformer.encoder(x)
 
         x, max_index = torch.max(x, dim=1)
         
@@ -100,7 +100,6 @@ def test(loader):
     _val_recall = recall_score(y_true, y_pred)
     _val_f1 = f1_score(y_true, y_pred)
 
-    wandb.log({"Test Accuracy": _val_acc, "Test Precision": _val_precision, "Test Recall": _val_recall, "Test F1": _val_f1})
     return _val_confusion_matrix, _val_acc, _val_precision, _val_recall, _val_f1
 
 wandb.init(project="model_Transformer", config={
@@ -110,35 +109,56 @@ wandb.init(project="model_Transformer", config={
     "epochs": 50,
 })
 
-train_data = np.load('../../dataset/final_dataset_train.npz', allow_pickle=True)
+# Load datasets
+train_data = np.load('../../dataset/final_dataset_train_1.npz', allow_pickle=True)
+val_data = np.load('../../dataset/final_dataset_val_1.npz', allow_pickle=True)
+test_data = np.load('../../dataset/final_dataset_test_1.npz', allow_pickle=True)
+
 train_x_name = train_data['x_name']
 train_x_semantic = train_data['x_semantic']
 train_y = train_data['y']
 
-test_data = np.load('../../dataset/final_dataset_test.npz', allow_pickle=True)
+val_x_name = val_data['x_name']
+val_x_semantic = val_data['x_semantic']
+val_y = val_data['y']
+
 test_x_name = test_data['x_name']
 test_x_semantic = test_data['x_semantic']
 test_y = test_data['y']
-train_x = np.concatenate([train_x_name, train_x_semantic], 1)
-test_x = np.concatenate([test_x_name, test_x_semantic], 1)
 
+# Combine features
+train_x = np.concatenate([train_x_name, train_x_semantic], axis=1)
+val_x = np.concatenate([val_x_name, val_x_semantic], axis=1)
+test_x = np.concatenate([test_x_name, test_x_semantic], axis=1)
+
+# Convert to PyTorch tensors
 train_xt = torch.from_numpy(train_x)
+val_xt = torch.from_numpy(val_x)
 test_xt = torch.from_numpy(test_x)
 train_yt = torch.from_numpy(train_y.astype(np.float32))
+val_yt = torch.from_numpy(val_y.astype(np.float32))
 test_yt = torch.from_numpy(test_y.astype(np.float32))
 
-train_data = Data.TensorDataset(train_xt, train_yt)
-test_data = Data.TensorDataset(test_xt, test_yt)
+# Create DataLoaders
+train_dataset = Data.TensorDataset(train_xt, train_yt)
+val_dataset = Data.TensorDataset(val_xt, val_yt)
+test_dataset = Data.TensorDataset(test_xt, test_yt)
 
 train_loader = Data.DataLoader(
-    dataset=train_data,
+    dataset=train_dataset,
     batch_size=64,
     shuffle=True,
     num_workers=1,
 )
 
+val_loader = Data.DataLoader(
+    dataset=val_dataset,
+    batch_size=64,
+    num_workers=1,
+)
+
 test_loader = Data.DataLoader(
-    dataset=test_data,
+    dataset=test_dataset,
     batch_size=64,
     num_workers=1,
 )
@@ -148,9 +168,9 @@ optimizer = torch.optim.Adam(model.parameters(), lr=wandb.config.learning_rate)
 
 for epoch in range(1, wandb.config.epochs + 1):
     loss = train(epoch, train_loader)
-    con, acc, precision, recall, f1 = test(train_loader)
+    con, acc, precision, recall, f1 = test(val_loader)
     print(f'Epoch: {epoch:03d}, Loss: {loss:.5f}, Train Acc: {acc:.5f}, Train Precision: {precision:.5f}, Train Recall: {recall:.5f}, Train F1: {f1:.5f}')
-    wandb.log({"Epoch Loss": loss, "Epoch Accuracy": acc, "Epoch Precision": precision, "Epoch Recall": recall, "Epoch F1": f1})
+    wandb.log({"Epoch": epoch, "Loss": loss, "Train Accuracy": acc, "Train Precision": precision, "Train Recall": recall, "Train F1": f1})
 
 con, acc, precision, recall, f1 = test(test_loader)
 print("==================================")
@@ -161,5 +181,5 @@ print('Recall:', recall)
 print('F1 Score:', f1)
 print(con)
 
-torch.save(model, './model_wandb_0921.pkl')
+torch.save(model, './model_wandb_0927.pkl')
 wandb.finish()
