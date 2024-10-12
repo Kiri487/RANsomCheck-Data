@@ -181,5 +181,5 @@ print('Recall:', recall)
 print('F1 Score:', f1)
 print(con)
 
-torch.save(model, './model_wandb_0927.pkl')
+torch.save(model, './model_wandb_1007.pkl')
 wandb.finish()
